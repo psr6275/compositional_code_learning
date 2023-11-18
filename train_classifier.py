@@ -25,7 +25,7 @@ parser = argparse.ArgumentParser(description='Train a classifier to compare perf
 parser.add_argument('--data_folder', default='data/', metavar='DIR',
                     help='folder to retrieve embeddings, data, text files, etc.')
 parser.add_argument('--models_folder', default='models/', metavar='DIR',help='folder to save models')
-parser.add_argument('--model_file', default='epoch_147000.pt', metavar='DIR',help='specific directory to model you want to load')
+parser.add_argument('--model_file', default='epoch_181000.pt', metavar='DIR',help='specific directory to model you want to load')
 parser.add_argument('--embedding_size', default=300, type=int, metavar='N', help='Embedding dimension size, default: 300')
 parser.add_argument('--M', default=32, type=int, metavar='N', help='Number of source dictionaries, default: 64')
 parser.add_argument('--K', default=16, type=int, metavar='N', help='Source dictionary size, default: 8')
@@ -67,7 +67,7 @@ def classifier_train(epochs, classifier, optimizer, loss_func, train_iter, test_
             # Perform optimization step
             optimizer.step()
         train_loss, train_acc = test_model(classifier, train_iter,loss_func,device)
-        valid_loss, valid_acc = test_model(classifier, train_iter,loss_func,device)
+        valid_loss, valid_acc = test_model(classifier, test_iter,loss_func,device)
         
         # If this is our lowest validation loss, save the model
         if valid_loss < best_val_loss:
