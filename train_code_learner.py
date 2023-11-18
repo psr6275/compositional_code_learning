@@ -20,8 +20,8 @@ parser.add_argument('--data_folder', default='data/', metavar='DIR',
 parser.add_argument('--models_folder', default='models/', metavar='DIR',
                     help='folder to save models')
 parser.add_argument('--embedding_size', default=300, type=int, metavar='N', help='Embedding dimension size, default: 300')
-parser.add_argument('--M', default=64, type=int, metavar='N', help='Number of source dictionaries, default: 64')
-parser.add_argument('--K', default=8, type=int, metavar='N', help='Source dictionary size, default: 8')
+parser.add_argument('--M', default=32, type=int, metavar='N', help='Number of source dictionaries, default: 64')
+parser.add_argument('--K', default=16, type=int, metavar='N', help='Source dictionary size, default: 8')
 parser.add_argument('--lr', default=0.0001, type=float, metavar='N', help='Adam learning rate, default: 0.0001')
 parser.add_argument('--batch_size', default=128, type=int, metavar='N', help='Minibatch size, default: 128')
 parser.add_argument('--epochs', default=200000, type=int, metavar='N', help='Total number of epochs, default: 200,000')
@@ -41,6 +41,7 @@ def train(epochs, batch_size, model, optimizer, loss_func, orig_embeddings, tau=
 
     # TRAINING PROCESS- each epoch is really a minibatch sample
     for epoch in range(epochs):
+        model.train()
         # Let our training batch be a random selection of batch_size from the training set
         train_batch = orig_embeddings[np.random.choice(train_indices, batch_size)]
         # Because our model is an autoencoder, the data = target
@@ -62,6 +63,7 @@ def train(epochs, batch_size, model, optimizer, loss_func, orig_embeddings, tau=
         # VALIDATION
         # Every 1000 iterations, check our model with a validation set
         if epoch % 500 == 0:
+            model.eval()
             # Let our validation batch be a random selection of batch_size from the validation set
             valid_batch = orig_embeddings[np.random.choice(valid_indices, batch_size)]
             # Because our model is an autoencoder, the data = target

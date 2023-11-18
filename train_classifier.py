@@ -13,21 +13,23 @@ from torchtext.legacy import data
 from torchtext.legacy import datasets
 
 from models import Code_Learner, Classifier
+from utils import test_model
 
 import time
 
 # Use the GPU if it's available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 use_gpu = torch.cuda.is_available()
 parser = argparse.ArgumentParser(description='Train a classifier to compare performance between GloVE and encoding')
 # Directory where we want to write everything we save in this script to
 parser.add_argument('--data_folder', default='data/', metavar='DIR',
                     help='folder to retrieve embeddings, data, text files, etc.')
 parser.add_argument('--models_folder', default='models/', metavar='DIR',help='folder to save models')
-parser.add_argument('--model_file', default='models/64_8/epoch_7000.pt', metavar='DIR',help='specific directory to model you want to load')
+parser.add_argument('--model_file', default='epoch_147000.pt', metavar='DIR',help='specific directory to model you want to load')
 parser.add_argument('--embedding_size', default=300, type=int, metavar='N', help='Embedding dimension size, default: 300')
-parser.add_argument('--M', default=64, type=int, metavar='N', help='Number of source dictionaries, default: 64')
-parser.add_argument('--K', default=8, type=int, metavar='N', help='Source dictionary size, default: 8')
-parser.add_argument('--lr', default=0.0001, type=float, metavar='N', help='Adam learning rate, default: 0.0001')
+parser.add_argument('--M', default=32, type=int, metavar='N', help='Number of source dictionaries, default: 64')
+parser.add_argument('--K', default=16, type=int, metavar='N', help='Source dictionary size, default: 8')
+parser.add_argument('--lr', default=0.001, type=float, metavar='N', help='Adam learning rate, default: 0.0001')
 parser.add_argument('--batch_size', default=128, type=int, metavar='N', help='Minibatch size, default: 128')
 parser.add_argument('--max_len', default=400, type=int, metavar='N', help='Max sentence length allowed, default: 400')
 parser.add_argument('--epochs', default=30, type=int, metavar='N', help='Total number of epochs, default: 30')
@@ -38,15 +40,20 @@ def classifier_train(epochs, classifier, optimizer, loss_func, train_iter, test_
     classifier.train()
     # Initialize validation loss
     best_val_loss = float('inf')
+    sdir = os.path.join(args.models_folder, '%s_classifier'%c_type)
+    if not os.path.isdir(sdir):
+        print("create directory for saving models: %s"%sdir)
+        os.mkdir(sdir)
     # For every epoch
     for epoch in range(epochs):
         valid_loss = 0
         # For every batch
+        classifier.train()
         for batch in train_iter:
             # Each batch has review, label
             data, label = batch.text, batch.label
             if use_gpu:
-                data, label = data.cuda(), label.cuda()
+                data, label = data.to(device), label.to(device)
             # Labels in original dataset are given as 1 and 2, so we make that 0 and 1 instead
             label = label - 1
             # Clear gradients
@@ -59,33 +66,25 @@ def classifier_train(epochs, classifier, optimizer, loss_func, train_iter, test_
             loss.backward()
             # Perform optimization step
             optimizer.step()
-
-        # VALIDATION
-        correct = 0
-        total_val_examples = 0
-        # Go through same steps as training, except do not update weights
-        for batch in test_iter:
-            valid_data, valid_label = batch.text, batch.label
-            if use_gpu:
-                valid_data, valid_label = valid_data.cuda(), valid_label.cuda()
-            valid_label = valid_label - 1
-            # Give hard predictions instead of soft ones
-            valid_preds = classifier(valid_data).data.max(1)[1]
-            # Count how many the model got correct
-            correct += torch.sum(valid_preds == valid_label).item()
-            # Update number of total examples
-            total_val_examples += len(valid_label)
+        train_loss, train_acc = test_model(classifier, train_iter,loss_func,device)
+        valid_loss, valid_acc = test_model(classifier, train_iter,loss_func,device)
+        
         # If this is our lowest validation loss, save the model
         if valid_loss < best_val_loss:
-            torch.save(classifier, args.model_folder + c_type + '_classifier/epoch_' + str(epoch) + '.pt')
+            spath = os.path.join(sdir, 'epoch_%s.pt'%(epoch))
+            print("save mode in %s"%spath)
+            torch.save(classifier, spath)
             best_val_loss = valid_loss
         # Calculate accuracy and report
-        print('''Epoch [{e}/{num_e}]\t Accuracy: {r_l:.3f}'''.format(e=epoch+1, num_e=epochs, r_l = correct / total_val_examples))
+        print('''Epoch [{e}/{num_e}]\t Loss: {l_t:.3f}/{l_v:.3f} Accuracy: {r_t:.3f}/{r_v:.3f}'''.format(e=epoch+1, num_e=epochs, l_t=train_loss, 
+                                                                                                         l_v = valid_loss, r_t =train_acc, r_v = valid_acc))
 
 def main():
     global args
     # Parse commands from ArgumentParser
     args = parser.parse_args()
+    args.models_folder = os.path.join(args.models_folder,'%s_%s'%(args.M,args.K))
+    args.model_file = os.path.join(args.models_folder,args.model_file)
     # Our text field for imdb data
     TEXT = data.Field(lower=True)
     # Our label field for imdb data
@@ -136,7 +135,7 @@ def main():
         base_c = Classifier(torch.FloatTensor(comp_embedding), args.batch_size)
         # Put model into CUDA memory if using GPU
         if use_gpu:
-            base_c = base_c.cuda()
+            base_c = base_c.to(device)
         # Initialize Optimizer
         optimizer = optim.Adam(filter(lambda p: p.requires_grad,base_c.parameters()), lr=args.lr)
         # Define Loss function
@@ -159,15 +158,15 @@ def main():
         model = torch.load(args.model_file)
         # Put model into CUDA memory if using GPU
         if use_gpu:
-            code_embedding = code_embedding.cuda()
-            model = model.cuda()
+            code_embedding = code_embedding.to(device)
+            model = model.to(device)
         # For all words in vocab
         for i in range(len(TEXT.vocab)):
             # Try to see if it has a corresponding glove_vector
             try:
                 glove_vec = glove_dict[TEXT.vocab.itos[i]]
                 if use_gpu:
-                    glove_vec = glove_vec.cuda()
+                    glove_vec = glove_vec.to(device)
                 # If so, then generate our own embedding for the word using our model
                 code_embedding[i] = model(glove_vec, training=False)
             # The word doesn't have a GloVE vector, keep it randomly initialized
@@ -176,7 +175,7 @@ def main():
         base_c = Classifier(torch.FloatTensor(code_embedding.cpu()), args.batch_size)
         # Put model into CUDA memory if using GPU
         if use_gpu:
-            base_c = base_c.cuda()
+            base_c = base_c.to(device)
         # Initialize Optimizer
         optimizer = optim.Adam(filter(lambda p: p.requires_grad,base_c.parameters()), lr=args.lr)
         # Define Loss function
