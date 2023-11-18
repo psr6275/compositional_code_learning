@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 from models import Code_Learner
-
+import time
 
 # Use the GPU if it's available
 use_gpu = torch.cuda.is_available()
@@ -101,7 +101,9 @@ def main():
     # Load GloVE baseline embeddings
     orig_embeddings = torch.load(args.data_folder + 'all_orig_emb.pt')
     # Train and save the model
+    st = time.time()
     train(args.epochs, args.batch_size, model, optimizer,loss_func, orig_embeddings)
-
+    et = time.time()
+    print("Elapsed time for training: %s"%(et-st))
 if __name__ == '__main__':
     main()

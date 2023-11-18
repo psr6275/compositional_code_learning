@@ -8,7 +8,13 @@ import argparse
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
+
+from torchtext.legacy import data
+from torchtext.legacy import datasets
+
 from models import Code_Learner, Classifier
+
+import time
 
 # Use the GPU if it's available
 use_gpu = torch.cuda.is_available()
@@ -81,9 +87,9 @@ def main():
     # Parse commands from ArgumentParser
     args = parser.parse_args()
     # Our text field for imdb data
-    TEXT = torchtext.data.Field(lower=True)
+    TEXT = data.Field(lower=True)
     # Our label field for imdb data
-    LABEL = torchtext.data.Field(sequential=False)
+    LABEL = data.Field(sequential=False)
     # Load GloVE embeddings
     orig_embeddings = torch.load(args.data_folder + 'all_orig_emb.pt')
     total_words = len(orig_embeddings)
@@ -98,7 +104,7 @@ def main():
         glove_dict[word] = orig_embeddings[i]
 
     # Load IMDB dataset with standard splits and restrictions identical to paper
-    train, test = torchtext.datasets.IMDB.splits(TEXT, LABEL, filter_pred=lambda ex: ex.label != 'neutral' and len(ex.text) <= 400)
+    train, test = datasets.IMDB.splits(TEXT, LABEL, filter_pred=lambda ex: ex.label != 'neutral' and len(ex.text) <= 400)
 
     # Both loops go through the words of train and test dataset, finds words without glove vectors, and replaces them with <unk>
     for i in range(len(train)):
@@ -117,7 +123,7 @@ def main():
     LABEL.build_vocab(train)
 
     # Create iterators over train and test set
-    train_iter, test_iter = torchtext.data.BucketIterator.splits((train, test), batch_size=args.batch_size, repeat=False, device=-1)
+    train_iter, test_iter = data.BucketIterator.splits((train, test), batch_size=args.batch_size, repeat=False, device=-1)
 
     # If we want to use baseline GloVE embeddings
     if args.embedding_type == 'baseline':
@@ -175,8 +181,9 @@ def main():
         optimizer = optim.Adam(filter(lambda p: p.requires_grad,base_c.parameters()), lr=args.lr)
         # Define Loss function
         loss_func = nn.NLLLoss()
-
+    st = time.time()
     classifier_train(args.epochs, base_c, optimizer, loss_func, train_iter, test_iter, args.embedding_type)
-
+    et = time.time()
+    print("Elapsed time for training: %s"%(et-st))
 if __name__ == '__main__':
     main()

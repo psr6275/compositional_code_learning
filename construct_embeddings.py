@@ -2,13 +2,15 @@ import torchtext
 import torch
 import numpy as np
 import argparse
+from torchtext.legacy import data
+from torchtext.legacy import datasets
 
 parser = argparse.ArgumentParser(description='Create GloVE and IMDB embeddings')
 # File name for GloVE vectors
-parser.add_argument('--glove_file', default='glove.42B.300d.txt', metavar='file',
+parser.add_argument('--glove_file', default='./data/glove.42B.300d.txt', metavar='file',
                     help='file which contains GloVE embeddings')
 # Directory where we want to write everything we save in this script to
-parser.add_argument('--data_folder', default='data/', metavar='DIR',
+parser.add_argument('--data_folder', default='./data/', metavar='DIR',
                     help='folder to save embeddings, data, text files, etc.')
 
 def main():
@@ -16,12 +18,14 @@ def main():
     # Parse commands from ArgumentParser
     args = parser.parse_args()
     # Our text field for imdb data
-    TEXT = torchtext.data.Field(lower=True, fix_length=400)
+    # TEXT = torchtext.data.Field(lower=True, fix_length=400)
+    TEXT = data.Field(lower=True, fix_length=400)
     # Our label field for imdb data
-    LABEL = torchtext.data.Field(sequential=False)
+    # LABEL = torchtext.data.Field(sequential=False)
+    LABEL = data.Field(sequential=False)
 
     # Use standard split for IMDB dataset, filtering out reviews that are longer than 400 words
-    train, test = torchtext.datasets.IMDB.splits(TEXT, LABEL, \
+    train, test = datasets.IMDB.splits(TEXT, LABEL, \
     filter_pred=lambda ex: ex.label != 'neutral' and len(ex.text) <= 400)
     # Build vocabulary from training dataset
     TEXT.build_vocab(train)
